@@ -4,7 +4,7 @@ from unittest.mock import Mock, call, patch
 
 import requests
 
-from clients.ado_client import AdoClient, AdoClientError
+from pr_reviewer.ado_client import AdoClient, AdoClientError
 
 
 class AdoClientConfigurationTests(unittest.TestCase):
@@ -12,7 +12,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
         os.environ,
         {
             "ADO_ORGANIZATION": "example-org",
-            "PAT": "example-pat",
+            "ADO_PAT": "example-pat",
         },
         clear=True,
     )
@@ -21,14 +21,14 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
         self.assertEqual(client.config.organization, "example-org")
 
-    @patch.dict(os.environ, {"PAT": "example-pat"}, clear=True)
+    @patch.dict(os.environ, {"ADO_PAT": "example-pat"}, clear=True)
     def test_reports_missing_organization(self) -> None:
         with self.assertRaisesRegex(ValueError, "ADO_ORGANIZATION"):
             AdoClient()
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_get_pr_uses_organization_scoped_endpoint(self) -> None:
@@ -51,7 +51,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_request_returns_raw_response(self) -> None:
@@ -64,7 +64,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_request_json_wraps_invalid_json(self) -> None:
@@ -86,7 +86,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_get_pr_diff_uses_context_from_each_pull_request(self) -> None:
@@ -141,7 +141,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_get_pr_diff_uses_original_path_for_renamed_file(self) -> None:
@@ -207,7 +207,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_get_pr_diff_preserves_empty_file_path(self) -> None:
@@ -255,7 +255,7 @@ class AdoClientConfigurationTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"ADO_ORGANIZATION": "example-org", "PAT": "example-pat"},
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
         clear=True,
     )
     def test_context_manager_closes_session(self) -> None:
@@ -266,6 +266,44 @@ class AdoClientConfigurationTests(unittest.TestCase):
             self.assertIs(entered_client, client)
 
         client.session.close.assert_called_once_with()
+
+    @patch.dict(
+        os.environ,
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
+        clear=True,
+    )
+    def test_iteration_changes_are_paginated(self) -> None:
+        client = AdoClient()
+
+        with patch.object(
+            client,
+            "_request_json",
+            side_effect=[
+                {"changeEntries": [{"id": 1}], "nextSkip": 2000},
+                {"changeEntries": [{"id": 2}]},
+            ],
+        ) as request:
+            changes = client._get_iteration_changes(
+                pull_request_id=123,
+                iteration_id=2,
+                project_url="https://dev.azure.com/example-org/project/",
+                repository_path="_apis/git/repositories/repo",
+            )
+
+        self.assertEqual(changes, [{"id": 1}, {"id": 2}])
+        self.assertEqual(request.call_args_list[0].kwargs["params"]["$skip"], 0)
+        self.assertEqual(request.call_args_list[1].kwargs["params"]["$skip"], 2000)
+
+    @patch.dict(
+        os.environ,
+        {"ADO_ORGANIZATION": "example-org", "ADO_PAT": "example-pat"},
+        clear=True,
+    )
+    def test_rejects_non_positive_pull_request_id(self) -> None:
+        client = AdoClient()
+
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            client.get_pr(0)
 
     def test_get_pr_context_requires_project_and_repository(self) -> None:
         with self.assertRaisesRegex(AdoClientError, "repository and project metadata"):

@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 from copilot.tools import ToolInvocation
 
-from clients.ado_client import AdoClient
-from tools.ado_tools import create_ado_tools
+from pr_reviewer.ado_client import AdoClient
+from pr_reviewer.ado_tools import create_ado_tools
 
 
 class AdoToolsTests(unittest.IsolatedAsyncioTestCase):
@@ -21,7 +21,7 @@ class AdoToolsTests(unittest.IsolatedAsyncioTestCase):
                 "displayName": "Example Author",
                 "uniqueName": "author@example.com",
             },
-            "description": "This field should not be returned.",
+            "description": "Handle failed requests without retrying forever.",
             "repository": {"id": "internal-repository-id"},
         }
         get_pr_details, _ = create_ado_tools(ado_client)
@@ -39,6 +39,7 @@ class AdoToolsTests(unittest.IsolatedAsyncioTestCase):
                 "source_branch": "refs/heads/feature/request-handling",
                 "target_branch": "refs/heads/main",
                 "author": "Example Author",
+                "description": "Handle failed requests without retrying forever.",
             },
         )
         ado_client.get_pr.assert_called_once_with(123)
@@ -110,6 +111,7 @@ class AdoToolsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("added, deleted, and modified lines", get_pr_diff.description)
         self.assertIn("actual code changes", get_pr_diff.description)
+        self.assertTrue(get_pr_diff.skip_permission)
 
 
 if __name__ == "__main__":

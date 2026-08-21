@@ -1,4 +1,4 @@
-# ado_client.py
+"""Read-only client for the Azure DevOps Git REST API."""
 
 from __future__ import annotations
 
@@ -10,9 +10,6 @@ from typing import Any, Self
 from urllib.parse import quote
 
 import requests
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 class AdoClientError(Exception):
@@ -39,13 +36,7 @@ class AdoClient:
     """
     Read-only Azure DevOps client for a code review agent.
 
-    Supported operations:
-        - get_pr()
-        - get_pr_diff()
-        - get_file_from_remote_on_target_branch()
-        - get_commit_history()
-        - get_pr_commits()
-        - get_pr_threads()
+    Supported operations are pull-request metadata and unified diff retrieval.
     """
 
     def __init__(
@@ -56,28 +47,32 @@ class AdoClient:
         api_version: str = "7.1",
         timeout: int = 30,
     ) -> None:
-        organization = organization or os.getenv("ADO_ORGANIZATION")
+        organization = (organization or os.getenv("ADO_ORGANIZATION", "")).strip()
 
         if not organization:
             raise ValueError(
                 "Azure DevOps organization not found. Set ADO_ORGANIZATION "
-                "in the .env file or pass organization explicitly."
+                "in the environment or pass organization explicitly."
             )
 
+        if timeout <= 0:
+            raise ValueError("timeout must be greater than zero")
+
         self.config = AdoConfig(
-            organization=organization,
+            organization=organization.strip("/"),
             api_version=api_version,
         )
-
         self.timeout = timeout
-        self.pat = pat or os.getenv("PAT")
+        self.pat = pat or os.getenv("ADO_PAT")
 
         if not self.pat:
             raise ValueError(
-                "Azure DevOps PAT not found. Set PAT in the .env file or pass pat explicitly."
+                "Azure DevOps PAT not found. Set ADO_PAT in the environment "
+                "or pass pat explicitly."
             )
 
-        self.base_url = f"https://dev.azure.com/{self.config.organization}/"
+        encoded_organization = quote(self.config.organization, safe="")
+        self.base_url = f"https://dev.azure.com/{encoded_organization}/"
 
         self.session = requests.Session()
         self._configure_session()
@@ -96,6 +91,7 @@ class AdoClient:
     def get_pr(self, pull_request_id: int) -> dict[str, Any]:
         """Get complete metadata for a pull request."""
 
+        self._validate_pull_request_id(pull_request_id)
         return self._request_json(
             "GET",
             f"_apis/git/pullrequests/{pull_request_id}",
@@ -104,6 +100,7 @@ class AdoClient:
     def get_pr_diff(self, pull_request_id: int) -> str:
         """Return a unified diff for all files changed in the latest PR iteration."""
 
+        self._validate_pull_request_id(pull_request_id)
         pull_request = self.get_pr(pull_request_id)
         project, repository_id = self._get_pr_context(pull_request)
         project_url = f"{self.base_url}{quote(project, safe='')}/"
@@ -129,16 +126,12 @@ class AdoClient:
 
         iteration_id = latest_iteration["id"]
 
-        changes = self._request_json(
-            "GET",
-            f"{repository_path}"
-            f"/pullRequests/{pull_request_id}"
-            f"/iterations/{iteration_id}/changes",
-            params={"$top": 2000},
-            base_url=project_url,
+        change_entries = self._get_iteration_changes(
+            pull_request_id=pull_request_id,
+            iteration_id=iteration_id,
+            project_url=project_url,
+            repository_path=repository_path,
         )
-
-        change_entries = changes.get("changeEntries", [])
 
         base_commit = latest_iteration["targetRefCommit"]["commitId"]
         target_commit = latest_iteration["sourceRefCommit"]["commitId"]
@@ -194,6 +187,47 @@ class AdoClient:
                 diffs.append(diff_text)
 
         return "\n".join(diffs)
+
+    def _get_iteration_changes(
+        self,
+        *,
+        pull_request_id: int,
+        iteration_id: int,
+        project_url: str,
+        repository_path: str,
+    ) -> list[dict[str, Any]]:
+        """Retrieve every page of changes for an iteration."""
+
+        path = (
+            f"{repository_path}/pullRequests/{pull_request_id}"
+            f"/iterations/{iteration_id}/changes"
+        )
+        all_changes: list[dict[str, Any]] = []
+        skip = 0
+
+        while True:
+            page = self._request_json(
+                "GET",
+                path,
+                params={"$top": 2000, "$skip": skip},
+                base_url=project_url,
+            )
+            entries = page.get("changeEntries", [])
+            if not isinstance(entries, list):
+                raise AdoClientError(
+                    "Azure DevOps returned invalid pull request changes."
+                )
+            all_changes.extend(entries)
+
+            next_skip = page.get("nextSkip")
+            if not isinstance(next_skip, int) or next_skip <= skip:
+                return all_changes
+            skip = next_skip
+
+    @staticmethod
+    def _validate_pull_request_id(pull_request_id: int) -> None:
+        if pull_request_id <= 0:
+            raise ValueError("pull_request_id must be greater than zero")
 
     def _configure_session(self) -> None:
         credentials = base64.b64encode(f":{self.pat}".encode()).decode()
@@ -337,4 +371,7 @@ class AdoClient:
         if data.get("contentMetadata", {}).get("isBinary"):
             return ""
 
-        return data.get("content", "")
+        content = data.get("content", "")
+        if not isinstance(content, str):
+            raise AdoClientError("Azure DevOps returned unexpected file content.")
+        return content
