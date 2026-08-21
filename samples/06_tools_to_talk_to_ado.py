@@ -81,7 +81,7 @@ async def main():
     )
     session.on(handle_event)
 
-    response = await session.send_and_wait(
+    await session.send_and_wait(
         "Get details of Azure Devops Pull Request: 123", timeout=300
     )
     await client.stop()

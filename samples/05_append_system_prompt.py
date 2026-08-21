@@ -42,10 +42,11 @@ async def main():
 
     session.on(handle_event)
 
-    response = await session.send_and_wait(prompt="Explain what is pull request?")
+    await session.send_and_wait(prompt="Explain what is pull request?")
 
-
-    logger.info("\n\n ============= New Session with Kindergarten Teacher persona (using system prompt)! ============= \n\n")
+    logger.info(
+        "\n\n ============= New Session with Kindergarten Teacher persona (using system prompt)! ============= \n\n"
+    )
 
     session = await client.create_session(
         on_permission_request=PermissionHandler.approve_all,
@@ -61,9 +62,8 @@ async def main():
     )
     session.on(handle_event)
 
-    response = await session.send_and_wait(prompt="Explain what is pull request?")
+    await session.send_and_wait(prompt="Explain what is pull request?")
     await client.stop()
-
 
 
 if __name__ == "__main__":

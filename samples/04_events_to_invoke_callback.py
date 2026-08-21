@@ -10,7 +10,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 logger = logging.getLogger(__name__)
 
 
-
 def handle_event(event: SessionEvent):
     if event.type == SessionEventType.ASSISTANT_MESSAGE_DELTA:
         print(
@@ -26,14 +25,13 @@ async def main():
         on_permission_request=PermissionHandler.approve_all
     )
 
-
     session.on(handle_event)
 
     user_input = "My name is Niketan. Tell me your name!"
     while True:
         if user_input.lower() == "exit":
             break
-        response = await session.send_and_wait(prompt=user_input)
+        await session.send_and_wait(prompt=user_input)
         user_input = input("User: ")
         # logger.info(f"Copilot: {response.data.content}")
     await client.stop()
