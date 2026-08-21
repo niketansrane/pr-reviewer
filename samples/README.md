@@ -16,3 +16,9 @@ uv run python samples\01_send_your_first_prompt.py
 ```
 
 Copy `.env-template` to `.env` and configure it before running the Azure DevOps sample.
+
+Pass the pull request ID when running sample 6:
+
+```powershell
+uv run python samples\06_add_azure_devops_tools.py <pull-request-id>
+```

@@ -1,42 +1,19 @@
+import argparse
 import asyncio
 import logging
-from typing import Any
 
-from copilot import CopilotClient, SessionEvent, SessionEventType, Tool
+from copilot import CopilotClient, SessionEvent, SessionEventType
 from copilot.session import PermissionHandler, SystemMessageAppendConfig
 from copilot.session_events import ToolExecutionCompleteData, ToolExecutionStartData
-from copilot.tools import define_tool
-from pydantic import BaseModel, Field
 
 from clients.ado_client import AdoClient
+from tools.ado_tools import create_ado_tools
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-
-class GetPullRequestParams(BaseModel):
-    pull_request_id: int = Field(description="Pull Request Identifier")
-
-
-class GetPullRequestDiffParams(BaseModel):
-    pull_request_id: int = Field(description="Pull Request Identifier")
-
-
-def create_ado_tools(ado_client: AdoClient) -> list[Tool]:
-    @define_tool(description="Get Azure Devops Pull Request Details")
-    def get_pr_details(params: GetPullRequestParams) -> dict[str, Any]:
-        pull_request_id = params.pull_request_id
-        return ado_client.get_pr(pull_request_id)
-
-    @define_tool(description="Get Azure Devops Pull Request Diff changes")
-    def get_pr_diff(params: GetPullRequestDiffParams) -> str:
-        pull_request_id = params.pull_request_id
-        return ado_client.get_pr_diff(pull_request_id=pull_request_id)
-
-    return [get_pr_details, get_pr_diff]
 
 
 def handle_event(event: SessionEvent):
@@ -58,7 +35,7 @@ def handle_event(event: SessionEvent):
         print()
 
 
-async def main():
+async def main(pull_request_id: int):
     client = CopilotClient()
     await client.start()
 
@@ -82,10 +59,16 @@ async def main():
     session.on(handle_event)
 
     await session.send_and_wait(
-        "Get details of Azure Devops Pull Request: 123", timeout=300
+        f"Get details of Azure Devops Pull Request: {pull_request_id}",
+        timeout=300,
     )
     await client.stop()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Review an Azure DevOps pull request.")
+    parser.add_argument(
+        "pull_request_id", type=int, help="Azure DevOps pull request ID"
+    )
+    args = parser.parse_args()
+    asyncio.run(main(args.pull_request_id))

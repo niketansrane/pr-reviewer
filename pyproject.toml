@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "github-copilot-sdk[telemetry]>=1.0.9",
+    "pydantic>=2.0.0",
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
 ]
