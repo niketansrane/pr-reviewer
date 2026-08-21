@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 from pr_reviewer.reviewer import review_pull_request
@@ -22,7 +23,12 @@ class ReviewerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await review_pull_request(123, ado_client)
 
-        client_class.assert_called_once_with(mode="empty")
+        client_class.assert_called_once()
+        client_options = client_class.call_args.kwargs
+        self.assertEqual(client_options["mode"], "empty")
+        base_directory = Path(client_options["base_directory"])
+        self.assertTrue(base_directory.name.startswith("ado-pr-review-"))
+        self.assertFalse(base_directory.exists())
         copilot_client.stop.assert_awaited_once_with()
         session.send_and_wait.assert_awaited_once_with(
             "Review Azure DevOps pull request 123.",
