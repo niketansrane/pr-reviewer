@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from tempfile import TemporaryDirectory
 
 from copilot import CopilotClient, SessionEvent
 from copilot.session import SystemMessageAppendConfig
@@ -35,19 +36,23 @@ async def review_pull_request(
 
     tools = create_ado_tools(ado_client)
     tool_names = [tool.name for tool in tools]
-    client = CopilotClient(mode="empty")
+    # Empty mode deliberately avoids the user's global ~/.copilot storage and
+    # requires an explicit, tenant-scoped location. This reviewer has no state
+    # to preserve, so isolate each invocation in a short-lived directory.
+    with TemporaryDirectory(prefix="ado-pr-review-") as base_directory:
+        client = CopilotClient(mode="empty", base_directory=base_directory)
 
-    await client.start()
-    try:
-        session = await client.create_session(
-            tools=tools,
-            available_tools=tool_names,
-            system_message=SystemMessageAppendConfig(content=SYSTEM_PROMPT),
-            on_event=on_event,
-        )
-        await session.send_and_wait(
-            f"Review Azure DevOps pull request {pull_request_id}.",
-            timeout=timeout,
-        )
-    finally:
-        await client.stop()
+        await client.start()
+        try:
+            session = await client.create_session(
+                tools=tools,
+                available_tools=tool_names,
+                system_message=SystemMessageAppendConfig(content=SYSTEM_PROMPT),
+                on_event=on_event,
+            )
+            await session.send_and_wait(
+                f"Review Azure DevOps pull request {pull_request_id}.",
+                timeout=timeout,
+            )
+        finally:
+            await client.stop()
