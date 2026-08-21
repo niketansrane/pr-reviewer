@@ -1,18 +1,31 @@
 [project]
-name = "code-review-agent"
+name = "azure-devops-pr-reviewer"
 version = "0.1.0"
-description = "Add your description here"
+description = "A local, AI-assisted Azure DevOps pull-request reviewer"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "github-copilot-sdk[telemetry]>=1.0.9",
     "pydantic>=2.0.0",
-    "python-dotenv>=1.2.2",
-    "requests>=2.34.2",
+    "python-dotenv>=1.0.0",
+    "requests>=2.32.0",
 ]
+
+[project.scripts]
+ado-pr-review = "pr_reviewer.cli:main"
 
 [dependency-groups]
 dev = [
     "pre-commit>=4.0.0",
     "ruff>=0.16.3",
 ]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pr_reviewer*"]
+
+[tool.ruff]
+target-version = "py311"

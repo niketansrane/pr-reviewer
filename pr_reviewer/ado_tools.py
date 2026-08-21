@@ -7,7 +7,7 @@ from copilot import Tool
 from copilot.tools import define_tool
 from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
-from clients.ado_client import AdoClient
+from pr_reviewer.ado_client import AdoClient
 
 
 class PullRequestParams(BaseModel):
@@ -26,6 +26,7 @@ class PullRequestDetails(BaseModel):
     source_branch: str = Field(validation_alias="sourceRefName")
     target_branch: str = Field(validation_alias="targetRefName")
     author: str = Field(validation_alias=AliasPath("createdBy", "displayName"))
+    description: str | None = None
 
 
 class FileChange(BaseModel):
@@ -90,9 +91,10 @@ def create_ado_tools(ado_client: AdoClient) -> list[Tool]:
     @define_tool(
         description=(
             "Get essential metadata for an Azure DevOps pull request, including "
-            "its title, status, source and target branches, and author. Use this "
-            "when you need to understand the purpose and state of a PR."
-        )
+            "its title, description, status, source and target branches, and author. "
+            "Use this to understand the purpose and state of a PR."
+        ),
+        skip_permission=True,
     )
     def get_pr_details(params: PullRequestParams) -> PullRequestDetails:
         response = ado_client.get_pr(params.pull_request_id)
@@ -103,7 +105,8 @@ def create_ado_tools(ado_client: AdoClient) -> list[Tool]:
             "Get the complete diff for an Azure DevOps pull request, organized "
             "by file and including added, deleted, and modified lines. Use this "
             "when you need to inspect the actual code changes in a PR."
-        )
+        ),
+        skip_permission=True,
     )
     def get_pr_diff(params: PullRequestParams) -> PullRequestDiff:
         diff = ado_client.get_pr_diff(pull_request_id=params.pull_request_id)
