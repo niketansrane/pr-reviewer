@@ -12,7 +12,7 @@ Run these examples in order to learn the GitHub Copilot SDK:
 Run a sample from the repository root:
 
 ```powershell
-uv run samples\01_send_your_first_prompt.py
+uv run python samples\01_send_your_first_prompt.py
 ```
 
 Copy `.env-template` to `.env` and configure it before running the Azure DevOps sample.
